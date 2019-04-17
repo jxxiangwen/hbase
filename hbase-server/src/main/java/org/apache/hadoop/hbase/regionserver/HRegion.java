@@ -6886,13 +6886,16 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
   @Override
   public Result get(final Get get) throws IOException {
+    // 检查查询的行是否在本region
     checkRow(get.getRow(), "Get");
     // Verify families are all valid
+    // 检查要查询的列簇是否存在
     if (get.hasFamilies()) {
       for (byte [] family: get.familySet()) {
         checkFamily(family);
       }
     } else { // Adding all families to scanner
+    // 如果没有设置列簇就查询所有列簇
       for (byte[] family: this.htableDescriptor.getFamiliesKeys()) {
         get.addFamily(family);
       }

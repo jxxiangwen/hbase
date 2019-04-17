@@ -61,6 +61,7 @@ public class QuotaUtil extends QuotaTableUtil {
         .setMaxVersions(1));
   }
 
+  // 默认配额是关闭的
   /** Returns true if the support for quota is enabled */
   public static boolean isQuotaEnabled(final Configuration conf) {
     return conf.getBoolean(QUOTA_CONF_KEY, QUOTA_ENABLED_DEFAULT);

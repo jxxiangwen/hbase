@@ -39,10 +39,13 @@ import org.apache.hadoop.hbase.util.BoundedPriorityBlockingQueue;
 public class SimpleRpcScheduler extends RpcScheduler {
   private static final Log LOG = LogFactory.getLog(SimpleRpcScheduler.class);
 
+  // 读请求队列占用总请求队列比例
   public static final String CALL_QUEUE_READ_SHARE_CONF_KEY =
       "hbase.ipc.server.callqueue.read.ratio";
+  // scan请求队列占用读请求队列比例
   public static final String CALL_QUEUE_SCAN_SHARE_CONF_KEY =
       "hbase.ipc.server.callqueue.scan.ratio";
+  // 队列个数等于该参数 * handlerCount 默认handlerCount为30，默认callQueuesHandlersFactor为0，如果为0就会默认创建一个队列
   public static final String CALL_QUEUE_HANDLER_FACTOR_CONF_KEY =
       "hbase.ipc.server.callqueue.handler.factor";
 

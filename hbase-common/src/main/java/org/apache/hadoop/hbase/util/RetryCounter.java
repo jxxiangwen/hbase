@@ -103,14 +103,17 @@ public class RetryCounter {
   }
 
   /**
+   * 退避策略
    * Policy for calculating sleeping intervals between retry attempts
    */
   public static class BackoffPolicy {
     public long getBackoffTime(RetryConfig config, int attempts) {
+      // 固定时间，永远是睡眠窗口
       return config.getSleepInterval();
     }
   }
 
+  // 指数退避算法
   public static class ExponentialBackoffPolicy extends BackoffPolicy {
     @Override
     public long getBackoffTime(RetryConfig config, int attempts) {
@@ -119,6 +122,7 @@ public class RetryCounter {
     }
   }
 
+  // 退避时间不能超过最大睡眠时间
   public static class ExponentialBackoffPolicyWithLimit extends ExponentialBackoffPolicy {
     @Override
     public long getBackoffTime(RetryConfig config, int attempts) {

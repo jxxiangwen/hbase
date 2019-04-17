@@ -120,10 +120,10 @@
       </plugin>
       <!-- General plugins -->
       <!-- Run findbugs -->
-      <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>findbugs-maven-plugin</artifactId>
-      </plugin>
+      <!--<plugin>-->
+        <!--<groupId>org.codehaus.mojo</groupId>-->
+        <!--<artifactId>findbugs-maven-plugin</artifactId>-->
+      <!--</plugin>-->
       <!-- Testing plugins -->
       <plugin>
         <artifactId>maven-surefire-plugin</artifactId>

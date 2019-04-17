@@ -72,6 +72,7 @@ public class QuotaCache implements Stoppable {
 
     // TODO: This will be replaced once we have the notification bus ready.
     Configuration conf = rsServices.getConfiguration();
+    // 如果配置改变，默认刷新周期是5分钟
     int period = conf.getInt(REFRESH_CONF_KEY, REFRESH_DEFAULT_PERIOD);
     refreshChore = new QuotaRefresherChore(period, this);
     rsServices.getChoreService().scheduleChore(refreshChore);

@@ -183,8 +183,10 @@ public class RecoverableZooKeeper {
               if (isRetry) {
                 LOG.debug("Node " + path + " already deleted. Assuming a " +
                     "previous attempt succeeded.");
+                // 重试中发现删除，可以返回
                 return;
               }
+              // 第一次删除就发现没有结点，抛出异常
               LOG.debug("Node " + path + " already deleted, retry=" + isRetry);
               throw e;
 
@@ -267,6 +269,13 @@ public class RecoverableZooKeeper {
     }
   }
 
+  /**
+   * 如果不需要重试就会抛出异常，如果需要重试什么也不做
+   * @param retryCounter
+   * @param e
+   * @param opName
+   * @throws KeeperException
+   */
   private void retryOrThrow(RetryCounter retryCounter, KeeperException e,
       String opName) throws KeeperException {
     LOG.debug("Possibly transient ZooKeeper, quorum=" + quorumServers + ", exception=" + e);
@@ -707,6 +716,11 @@ public class RecoverableZooKeeper {
     return null;
   }
 
+  /**
+   * data中移除metaData，获取最终的data数据
+   * @param data 原始data
+   * @return 去除meta之后的data
+   */
   public byte[] removeMetaData(byte[] data) {
     if(data == null || data.length == 0) {
       return data;

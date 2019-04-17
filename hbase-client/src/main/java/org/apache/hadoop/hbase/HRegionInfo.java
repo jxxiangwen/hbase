@@ -516,6 +516,7 @@ public class HRegionInfo implements Comparable<HRegionInfo> {
   }
 
   /**
+   * 获取的是regionName第一个逗号前的字符串
    * Gets the table name from the specified region name.
    * @param regionName
    * @return Table name.
