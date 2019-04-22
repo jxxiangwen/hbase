@@ -521,6 +521,7 @@ public class FSHLog implements WAL {
     if(maxLogsDefined){
       LOG.warn("'hbase.regionserver.maxlogs' was deprecated.");
     }
+    // 如果设置了hbase.regionserver.maxlogs就是用，否则就计算出允许最大未的WAL文件大小
     this.maxLogs = conf.getInt("hbase.regionserver.maxlogs",
         Math.max(32, calculateMaxLogFiles(memstoreRatio, logrollsize)));
     this.minTolerableReplication = conf.getInt("hbase.regionserver.hlog.tolerable.lowreplication",
@@ -776,9 +777,11 @@ public class FSHLog implements WAL {
   byte[][] findRegionsToForceFlush() throws IOException {
     byte [][] regions = null;
     int logCount = getNumRolledLogFiles();
+    // 如果WAl文件大于maxLogs就需要强制刷新memstore，因为这意味有很多memstore没有落盘，持续增大会使故障恢复时间变长
     if (logCount > this.maxLogs && logCount > 0) {
       Map.Entry<Path, Map<byte[], Long>> firstWALEntry =
         this.byWalRegionSequenceIds.firstEntry();
+      // 找到最旧的 un-archived WAL 文件，并找到这个 WAL 文件对应的 Regions， 然后对这些 Regions 进行刷写。
       regions = this.sequenceIdAccounting.findLower(firstWALEntry.getValue());
     }
     if (regions != null) {

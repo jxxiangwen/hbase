@@ -147,11 +147,13 @@ public class AggregationClient implements Closeable {
         return max;
       }
 
+      // 需要synchronized因为会并发的调用每个region的结果
       @Override
       public synchronized void update(byte[] region, byte[] row, R result) {
         max = (max == null || (result != null && ci.compare(max, result) < 0)) ? result : max;
       }
     }
+    // 对于每一个region的结果调用callback最终就记下了最大的值
     MaxCallBack aMaxCallBack = new MaxCallBack();
     table.coprocessorService(AggregateService.class, scan.getStartRow(), scan.getStopRow(),
         new Batch.Call<AggregateService, R>() {
@@ -160,6 +162,7 @@ public class AggregationClient implements Closeable {
             ServerRpcController controller = new ServerRpcController();
             BlockingRpcCallback<AggregateResponse> rpcCallback =
                 new BlockingRpcCallback<AggregateResponse>();
+            // 实现在服务端
             instance.getMax(controller, requestArg, rpcCallback);
             AggregateResponse response = rpcCallback.get();
             if (controller.failedOnException()) {

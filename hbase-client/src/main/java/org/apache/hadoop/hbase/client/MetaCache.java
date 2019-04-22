@@ -154,10 +154,12 @@ public class MetaCache {
    * @param locations the new locations
    */
   public void cacheLocation(final TableName tableName, final RegionLocations locations) {
+    // 缓存region信息，使用startKey作为map的key，因为map是个有序的map
     byte [] startKey = locations.getRegionLocation().getRegionInfo().getStartKey();
     ConcurrentMap<byte[], RegionLocations> tableLocations = getTableLocations(tableName);
     RegionLocations oldLocation = tableLocations.putIfAbsent(startKey, locations);
     boolean isNewCacheEntry = (oldLocation == null);
+    // 如果从来没有获取过当前startKey的缓存，只需要保存server信息就返回
     if (isNewCacheEntry) {
       if (LOG.isTraceEnabled()) {
         LOG.trace("Cached location: " + locations);
@@ -166,6 +168,7 @@ public class MetaCache {
       return;
     }
 
+    // 如果之前startKey缓存已经存在，就merge locations，然后替换startKey，再保存server信息
     // merge old and new locations and add it to the cache
     // Meta record might be stale - some (probably the same) server has closed the region
     // with later seqNum and told us about the new location.

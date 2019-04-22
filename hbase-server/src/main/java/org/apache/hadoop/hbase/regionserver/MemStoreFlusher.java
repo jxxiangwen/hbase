@@ -88,9 +88,11 @@ class MemStoreFlusher implements FlushRequester {
   private final HRegionServer server;
   private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
   private final Object blockSignal = new Object();
-
+  // 一个RS中所有memstore允许占用多大的堆，默认40%
   protected long globalMemStoreLimit;
+  // 触发全局memstore flush的百分比，默认是95%，
   protected float globalMemStoreLimitLowMarkPercent;
+  // RS中所有memstore加起来到达此值就要触发flush，值是heapSize * globalMemStoreLimit * globalMemStoreLimitLowMarkPercent
   protected long globalMemStoreLimitLowMark;
 
   private long blockingWaitTime;
@@ -111,14 +113,18 @@ class MemStoreFlusher implements FlushRequester {
     this.threadWakeFrequency =
       conf.getLong(HConstants.THREAD_WAKE_FREQUENCY, 10 * 1000);
     long max = -1L;
+    // 获取可用对大小
     final MemoryUsage usage = HeapMemorySizeUtil.safeGetHeapMemoryUsage();
     if (usage != null) {
       max = usage.getMax();
     }
     float globalMemStorePercent = HeapMemorySizeUtil.getGlobalMemStorePercent(conf, true);
+    // 一个RS中所有memstore允许占用多大的堆，默认40%
     this.globalMemStoreLimit = (long) (max * globalMemStorePercent);
+    // 触发全局memstore flush的百分比，默认是95%，也就是说默认所有memstore加起来到了可用memstore大小的95%就要触发flush
     this.globalMemStoreLimitLowMarkPercent =
         HeapMemorySizeUtil.getGlobalMemStoreLowerMark(conf, globalMemStorePercent);
+    // RS中所有memstore加起来到达此值就要触发flush，值是heapSize * globalMemStoreLimit * globalMemStoreLimitLowMarkPercent
     this.globalMemStoreLimitLowMark =
         (long) (this.globalMemStoreLimit * this.globalMemStoreLimitLowMarkPercent);
 

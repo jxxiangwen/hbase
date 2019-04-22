@@ -715,9 +715,11 @@ public class HTable implements HTableInterface, RegionLocator {
         "Invalid range: " + Bytes.toStringBinary(startKey) +
         " > " + Bytes.toStringBinary(endKey));
     }
+    // 从startKey开始， 每次下面的循环会添加新regions的startKey进入
     List<byte[]> keysInRange = new ArrayList<byte[]>();
     List<HRegionLocation> regionsInRange = new ArrayList<HRegionLocation>();
     byte[] currentKey = startKey;
+    // 不停的迭代直道找到的regions能够包围startKey和endKey
     do {
       HRegionLocation regionLocation = getRegionLocation(currentKey, reload);
       keysInRange.add(currentKey);
@@ -1723,11 +1725,13 @@ public class HTable implements HTableInterface, RegionLocator {
       final Batch.Callback<R> callback) throws ServiceException, Throwable {
 
     // get regions covered by the row range
+    // keys为startKey和所有符合要求regions的startKey
     List<byte[]> keys = getStartKeysInRange(startKey, endKey);
 
     Map<byte[],Future<R>> futures =
         new TreeMap<byte[],Future<R>>(Bytes.BYTES_COMPARATOR);
     for (final byte[] r : keys) {
+      // 对于每一个startKey使用线程池调用callable，并对结果应用callback
       final RegionCoprocessorRpcChannel channel =
           new RegionCoprocessorRpcChannel(connection, tableName, r);
       Future<R> future = pool.submit(
@@ -1735,9 +1739,11 @@ public class HTable implements HTableInterface, RegionLocator {
             @Override
             public R call() throws Exception {
               T instance = ProtobufUtil.newServiceStub(service, channel);
+              // 调用callable
               R result = callable.call(instance);
               byte[] region = channel.getLastRegion();
               if (callback != null) {
+                // 应用callback
                 callback.update(region, r, result);
               }
               return result;
@@ -1768,6 +1774,7 @@ public class HTable implements HTableInterface, RegionLocator {
     if (end == null) {
       end = HConstants.EMPTY_END_ROW;
     }
+    // get first会返回start和所有符合要求regions的startKey
     return getKeysAndRegionsInRange(start, end, true).getFirst();
   }
 

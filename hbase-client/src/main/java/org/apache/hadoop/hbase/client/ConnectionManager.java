@@ -802,6 +802,7 @@ class ConnectionManager {
       if (batchPool == null) {
         synchronized (this) {
           if (batchPool == null) {
+              // 初始化线程池
             this.batchPool = getThreadPool(conf.getInt("hbase.hconnection.threads.max", 256),
                 conf.getInt("hbase.hconnection.threads.core", 256), "-shared-", null);
             this.cleanupPool = true;
@@ -1185,6 +1186,7 @@ class ConnectionManager {
         throw new IllegalArgumentException(
             "table name cannot be null or zero length");
       }
+      // 如果是查meta表，需要读meta信息
       if (tableName.equals(TableName.META_TABLE_NAME)) {
         return locateMeta(tableName, useCache, replicaId);
       } else {
@@ -1201,6 +1203,7 @@ class ConnectionManager {
       byte[] metaCacheKey = HConstants.EMPTY_START_ROW; // use byte[0] as the row for meta
       RegionLocations locations = null;
       if (useCache) {
+        // 使用缓存读取
         locations = getCachedLocation(tableName, metaCacheKey);
         if (locations != null && locations.getRegionLocation(replicaId) != null) {
           return locations;
@@ -1209,6 +1212,8 @@ class ConnectionManager {
 
       // only one thread should do the lookup.
       synchronized (metaRegionLock) {
+        // double check，因为前面可能没有缓存下来，造成有多个线程争抢锁，都想去读取zk，
+        // 最终只会有一个线程读取，其他线程进入后就会double check，不去读取
         // Check the cache again for a hit in case some other thread made the
         // same query while we were waiting on the lock.
         if (useCache) {
@@ -2221,6 +2226,7 @@ class ConnectionManager {
       if (oldLocations != null) {
         oldLocation = oldLocations.getRegionLocationByRegionName(regionName);
       }
+      // 缓存的serverName和传入的不一致，代表已经更新过了，不再更新
       if (oldLocation == null || !source.equals(oldLocation.getServerName())) {
         // There is no such location in the cache (it's been removed already) or
         // the cache has already been refreshed with a different location.  => nothing to do

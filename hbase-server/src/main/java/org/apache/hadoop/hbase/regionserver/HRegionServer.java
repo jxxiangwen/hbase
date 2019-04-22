@@ -508,6 +508,7 @@ public class HRegionServer extends HasThread implements
     // Config'ed params
     this.numRetries = this.conf.getInt(HConstants.HBASE_CLIENT_RETRIES_NUMBER,
         HConstants.DEFAULT_HBASE_CLIENT_RETRIES_NUMBER);
+    // 默认定时任务线程周期
     this.threadWakeFrequency = conf.getInt(HConstants.THREAD_WAKE_FREQUENCY, 10 * 1000);
     this.msgInterval = conf.getInt("hbase.regionserver.msginterval", 3 * 1000);
 
@@ -840,6 +841,7 @@ public class HRegionServer extends HasThread implements
     // Background thread to check for compactions; needed if region has not gotten updates
     // in a while. It will take care of not checking too frequently on store-by-store basis.
     this.compactionChecker = new CompactionChecker(this, this.threadWakeFrequency, this);
+    // 定期flush memstore线程
     this.periodicFlusher = new PeriodicMemstoreFlusher(this.threadWakeFrequency, this);
     this.leases = new Leases(this.threadWakeFrequency);
 
@@ -1601,6 +1603,7 @@ public class HRegionServer extends HasThread implements
         if (((HRegion)r).shouldFlush(whyFlush)) {
           FlushRequester requester = server.getFlushRequester();
           if (requester != null) {
+            // 随机延期一个region flush，防止一次性刷新过多region
             long randomDelay = RandomUtils.nextInt(RANGE_OF_DELAY) + MIN_DELAY_TIME;
             LOG.info(getName() + " requesting flush of " +
               r.getRegionInfo().getRegionNameAsString() + " because " +

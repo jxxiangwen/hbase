@@ -573,8 +573,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
   final RegionServerServices rsServices;
   private RegionServerAccounting rsAccounting;
+  // 最长允许不刷新memstore时间间隔，默认一小时，设为0,不定时刷新
   private long flushCheckInterval;
   // flushPerChanges is to prevent too many changes in memstore
+  // 变更累计超过此值还没有flush就flush memstore
   private long flushPerChanges;
   private long blockingMemStoreSize;
   final long threadWakeFrequency;
@@ -762,6 +764,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         HTableDescriptor.DEFAULT_MEMSTORE_FLUSH_SIZE);
     }
     this.memstoreFlushSize = flushSize;
+    // 如果数据增长过快，到了blockingMemStoreSize，就会阻塞所有写入来flush，这时候请求会抛出RegionTooBusyException
+    // 默认是4倍的memstoreFlushSize
     this.blockingMemStoreSize = this.memstoreFlushSize *
         conf.getLong(HConstants.HREGION_MEMSTORE_BLOCK_MULTIPLIER,
                 HConstants.DEFAULT_HREGION_MEMSTORE_BLOCK_MULTIPLIER);
@@ -1332,6 +1336,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
   private final Object closeLock = new Object();
 
+  // 最长允许不刷新memstore时间间隔，默认一小时，设为0,不定时刷新
   /** Conf key for the periodic flush interval */
   public static final String MEMSTORE_PERIODIC_FLUSH_INTERVAL =
       "hbase.regionserver.optionalcacheflushinterval";
@@ -1340,6 +1345,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   /** Default interval for System tables memstore flush */
   public static final int SYSTEM_CACHE_FLUSH_INTERVAL = 300000; // 5 minutes
 
+  // 如果更新太多，也会触发memstore flush
   /** Conf key to force a flush if there are already enough changes for one region in memstore */
   public static final String MEMSTORE_FLUSH_PER_CHANGES =
       "hbase.regionserver.flush.per.changes";
@@ -2036,6 +2042,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   boolean shouldFlushStore(Store store) {
     long earliest = this.wal.getEarliestMemstoreSeqNum(getRegionInfo().getEncodedNameAsBytes(),
       store.getFamily().getName()) - 1;
+    // 长时间没有flush，导致更新过多也会触发flush
     if (earliest > 0 && earliest + flushPerChanges < mvcc.getReadPoint()) {
       if (LOG.isDebugEnabled()) {
         LOG.debug("Flush column family " + store.getColumnFamilyName() + " of " +
@@ -2044,6 +2051,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       }
       return true;
     }
+    // 检查是否长时间没有刷新memstore
     if (this.flushCheckInterval <= 0) {
       return false;
     }

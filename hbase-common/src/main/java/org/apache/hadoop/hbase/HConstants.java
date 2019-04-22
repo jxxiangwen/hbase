@@ -355,6 +355,7 @@ public final class HConstants {
    */
   public static final int DEFAULT_HREGION_MEMSTORE_BLOCK_MULTIPLIER = 4;
 
+  // 单个memstore超过此值会进行刷新到HFile操作,默认128M
   /** Conf key for the memstore size at which we flush the memstore */
   public static final String HREGION_MEMSTORE_FLUSH_SIZE =
       "hbase.hregion.memstore.flush.size";

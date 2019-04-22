@@ -89,6 +89,7 @@ public class RpcRetryingCaller<T> {
       if (callTimeout == Integer.MAX_VALUE) return Integer.MAX_VALUE;
       int remainingTime = (int) (callTimeout -
           (EnvironmentEdgeManager.currentTime() - this.globalStartTime));
+      // 如果剩余时间小于最小rpc超时时间就是用最小rpc超时时间
       if (remainingTime < MIN_RPC_TIMEOUT) {
         // If there is no time left, we're trying anyway. It's too late.
         // 0 means no timeout, and it's not the intent here. So we secure both cases by
@@ -101,6 +102,7 @@ public class RpcRetryingCaller<T> {
 
   private int getTimeout(int callTimeout){
     int timeout = getRemainingTime(callTimeout);
+    // 如果rpc超时时间小于timeout就用rpc超时时间
     if (timeout <= 0 || rpcTimeout > 0 && rpcTimeout < timeout){
       timeout = rpcTimeout;
     }
@@ -131,12 +133,14 @@ public class RpcRetryingCaller<T> {
     for (int tries = 0;; tries++) {
       long expectedSleep;
       try {
+        // 如果不是第一次就需要reload，因为可能是一些缓存的失效导致的
         callable.prepare(tries != 0); // if called with false, check table status on ZK
         interceptor.intercept(context.prepare(callable, tries));
         return callable.call(getTimeout(callTimeout));
       } catch (PreemptiveFastFailException e) {
         throw e;
       } catch (Throwable t) {
+        // 如果t是InterruptedIOException，InterruptedException或者ClosedByInterruptException及其子类型就会抛出异常
         ExceptionUtil.rethrowIfInterrupt(t);
         if (tries > startLogErrorsCnt) {
           LOG.info("Call exception, tries=" + tries + ", retries=" + retries + ", started=" +
@@ -146,22 +150,30 @@ public class RpcRetryingCaller<T> {
         }
 
         // translateException throws exception when should not retry: i.e. when request is bad.
+        // 如果是不可恢复的异常，比如NoSuchMethodError，NullPointerException等，就会抛出异常，
+        // 如果是本地连接方面的异常，就会记录下来，可以用来后面快速失败之类的处理
         interceptor.handleFailure(context, t);
+        // 一些不再尝试的异常DoNotRetryIOException直接抛出，不做后面的处理
         t = translateException(t);
+        // RegionServerCallable会去更新缓存的Locations信息,方式是如果异常是RegionMovedException就更新，其他会删除缓存
         callable.throwable(t, retries != 1);
         RetriesExhaustedException.ThrowableWithExtraContext qt =
             new RetriesExhaustedException.ThrowableWithExtraContext(t,
                 EnvironmentEdgeManager.currentTime(), toString());
+        // 记录下本次异常
         exceptions.add(qt);
+        // 超出重试次数，抛出异常
         if (tries >= retries - 1) {
           throw new RetriesExhaustedException(tries, exceptions);
         }
         // If the server is dead, we need to wait a little before retrying, to give
         //  a chance to the regions to be
         // get right pause time, start by RETRY_BACKOFF[0] * pause
+        // pause相当与sleep的单位，会使用避退算法
         expectedSleep = callable.sleep(pause, tries);
 
         // If, after the planned sleep, there won't be enough time left, we stop now.
+        // 计算如果睡眠expectedSleep之后的时间
         long duration = singleCallDuration(expectedSleep);
         if (duration > callTimeout) {
           String msg = "callTimeout=" + callTimeout + ", callDuration=" + duration +
@@ -169,9 +181,11 @@ public class RpcRetryingCaller<T> {
           throw (SocketTimeoutException)(new SocketTimeoutException(msg).initCause(t));
         }
       } finally {
+        // 更新失败信息，比如删除失败信息或者因为时间过长也会有删除失败信息的操作
         interceptor.updateFailureInfo(context);
       }
       try {
+        // 取消加sleep逻辑
         if (expectedSleep > 0) {
           synchronized (cancelled) {
             if (cancelled.get()) return null;

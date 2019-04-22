@@ -173,8 +173,11 @@ class PreemptiveFastFailInterceptor extends RetryingCallerInterceptor {
 
   public void handleThrowable(Throwable t1, ServerName serverName,
       MutableBoolean couldNotCommunicateWithServer) throws IOException {
+    // 如果是一些不能恢复的错误这里会直接抛出异常，比如NoSuchMethodError，NullPointerException等
+    // 可以恢复的才会返回异常
     Throwable t2 = translateException(t1);
     boolean isLocalException = !(t2 instanceof RemoteException);
+    // 如果是本地连接相关的异常就将其记录在repeatedFailuresMap中
     if (isLocalException && isConnectionException(t2)) {
       couldNotCommunicateWithServer.setValue(true);
       handleFailureToServer(serverName, t2);
@@ -244,6 +247,7 @@ class PreemptiveFastFailInterceptor extends RetryingCallerInterceptor {
     long now = System.currentTimeMillis();
     if (!(now > lastFailureMapCleanupTimeMilliSec
         + failureMapCleanupIntervalMilliSec))
+      // 还没到清理间隔,600s
       return;
 
     // remove entries that haven't been attempted in a while
@@ -253,10 +257,12 @@ class PreemptiveFastFailInterceptor extends RetryingCallerInterceptor {
     for (Entry<ServerName, FailureInfo> entry : repeatedFailuresMap.entrySet()) {
       if (now > entry.getValue().timeOfLatestAttemptMilliSec
           + failureMapCleanupIntervalMilliSec) { // no recent failures
+        // 这代表长时间没有连接过这台机器，清除失败信息
         repeatedFailuresMap.remove(entry.getKey());
       } else if (now > entry.getValue().timeOfFirstFailureMilliSec
           + this.fastFailClearingTimeMilliSec) { // been failing for a long
                                                  // time
+        // 这代表从第一次失败到现在已经过了很长时间
         LOG.error(entry.getKey()
             + " been failing for a long time. clearing out."
             + entry.getValue().toString());
@@ -286,6 +292,7 @@ class PreemptiveFastFailInterceptor extends RetryingCallerInterceptor {
     // if fInfo is null --> The server is considered good.
     // If the server is bad, wait long enough to believe that the server is
     // down.
+    // 如果超过fastFailThresholdMilliSec阈值客户端仍然不能连接服务端就快速失败
     return (fInfo != null &&
         EnvironmentEdgeManager.currentTime() >
           (fInfo.timeOfFirstFailureMilliSec + this.fastFailThresholdMilliSec));
