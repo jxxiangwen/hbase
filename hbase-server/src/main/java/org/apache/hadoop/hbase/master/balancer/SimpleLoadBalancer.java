@@ -247,6 +247,7 @@ public class SimpleLoadBalancer extends BaseLoadBalancer {
   public List<RegionPlan> balanceCluster(
       Map<ServerName, List<RegionInfo>> clusterMap) {
     List<RegionPlan> regionsToReturn = balanceMasterRegions(clusterMap);
+    // 第一个条件代表着如果有master的计划就直接返回了，去执行master的计划
     if (regionsToReturn != null || clusterMap == null || clusterMap.size() <= 1) {
       return regionsToReturn;
     }
@@ -255,6 +256,7 @@ public class SimpleLoadBalancer extends BaseLoadBalancer {
         return null;
       }
       clusterMap = new HashMap<>(clusterMap);
+      // 移出masterServer，因为已经balance过了
       clusterMap.remove(masterServerName);
     }
 

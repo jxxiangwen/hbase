@@ -39,6 +39,7 @@ public class BalancerChore extends ScheduledChore {
 
   public BalancerChore(HMaster master) {
     super(master.getServerName() + "-BalancerChore", master, master.getConfiguration().getInt(
+            // 默认5分钟执行一次
       HConstants.HBASE_BALANCER_PERIOD, HConstants.DEFAULT_HBASE_BALANCER_PERIOD));
     this.master = master;
   }

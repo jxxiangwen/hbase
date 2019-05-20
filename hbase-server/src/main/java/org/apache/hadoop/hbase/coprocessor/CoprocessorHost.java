@@ -18,35 +18,23 @@
 
 package org.apache.hadoop.hbase.coprocessor;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
-
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.*;
+import org.apache.hadoop.hbase.ipc.RpcServer;
+import org.apache.hadoop.hbase.security.User;
+import org.apache.hadoop.hbase.util.CoprocessorClassLoader;
+import org.apache.hadoop.hbase.util.SortedList;
+import org.apache.hbase.thirdparty.com.google.common.annotations.VisibleForTesting;
 import org.apache.yetus.audience.InterfaceAudience;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.Abortable;
-import org.apache.hadoop.hbase.Coprocessor;
-import org.apache.hadoop.hbase.CoprocessorEnvironment;
-import org.apache.hadoop.hbase.DoNotRetryIOException;
-import org.apache.hadoop.hbase.HConstants;
-import org.apache.hadoop.hbase.ipc.RpcServer;
-import org.apache.hadoop.hbase.security.User;
-import org.apache.hbase.thirdparty.com.google.common.annotations.VisibleForTesting;
-import org.apache.hadoop.hbase.util.CoprocessorClassLoader;
-import org.apache.hadoop.hbase.util.SortedList;
+
+import java.io.IOException;
+import java.util.*;
+import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 
 /**
  * Provides the common setup framework and runtime services for coprocessor
@@ -135,6 +123,7 @@ public abstract class CoprocessorHost<C extends Coprocessor, E extends Coprocess
 
     Class<?> implClass;
 
+    // 通过闯入的配置项目获取设置的协处理器类，比如master传入的是hbase.coprocessor.master.classes
     // load default coprocessors from configure file
     String[] defaultCPClasses = conf.getStrings(confKey);
     if (defaultCPClasses == null || defaultCPClasses.length == 0)
@@ -158,6 +147,7 @@ public abstract class CoprocessorHost<C extends Coprocessor, E extends Coprocess
         if (env != null) {
           this.coprocEnvironments.add(env);
           LOG.info("System coprocessor {} loaded, priority={}.", className, priority);
+          // 优先级数字越大优先级越低，每次加一也就意味着排在前面的协处理器比后面的优先级高
           ++priority;
         }
       } catch (Throwable t) {

@@ -916,7 +916,12 @@ public class RegionStates {
     return result;
   }
 
+  /**
+   * 根据regionsMap信息按照tableName将regionInfo按照ServerName分类
+   * @return
+   */
   public Map<TableName, Map<ServerName, List<RegionInfo>>> getAssignmentsByTable() {
+    // 根据regionsMap信息按照tableName将regionInfo按照ServerName分类
     final Map<TableName, Map<ServerName, List<RegionInfo>>> result = new HashMap<>();
     for (RegionStateNode node: regionsMap.values()) {
       Map<ServerName, List<RegionInfo>> tableResult = result.get(node.getTable());
@@ -939,6 +944,7 @@ public class RegionStates {
       serverResult.add(node.getRegionInfo());
     }
     // Add online servers with no assignment for the table.
+    // 比如存在表A，有些server可能不包含表A的任何region，此时要将此server对应的region信息设置为空列表
     for (Map<ServerName, List<RegionInfo>> table: result.values()) {
         for (ServerName svr : serverMap.keySet()) {
           if (!table.containsKey(svr)) {

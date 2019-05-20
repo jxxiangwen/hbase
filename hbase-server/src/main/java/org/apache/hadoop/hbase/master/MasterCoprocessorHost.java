@@ -702,6 +702,7 @@ public class MasterCoprocessorHost
     return execOperation(coprocEnvironments.isEmpty() ? null : new MasterObserverOperation() {
       @Override
       public void call(MasterObserver observer) throws IOException {
+        // 目前实现的只有访问控制AccessController，访问控制也是一个协处理器
         observer.preBalance(this);
       }
     });

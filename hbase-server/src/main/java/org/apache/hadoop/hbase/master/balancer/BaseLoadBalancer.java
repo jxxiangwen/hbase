@@ -230,23 +230,28 @@ public abstract class BaseLoadBalancer implements LoadBalancer {
           continue;
         }
         if (serversToIndex.get(sn.getAddress().toString()) == null) {
+          // 使用主机加端口进行编号
           serversToIndex.put(sn.getHostAndPort(), numServers++);
         }
         if (!hostsToIndex.containsKey(sn.getHostname())) {
+          // 使用主机进行编号
           hostsToIndex.put(sn.getHostname(), numHosts++);
           serversPerHostList.add(new ArrayList<>(1));
         }
 
         int serverIndex = serversToIndex.get(sn.getHostAndPort());
         int hostIndex = hostsToIndex.get(sn.getHostname());
+        // 如果存在一个主机上启动了多个server那么hostIndex所在的list就会有多个值
         serversPerHostList.get(hostIndex).add(serverIndex);
 
+        // 获取server所在的机架，根据dns来映射，默认不配置可以认为只有一个机架
         String rack = this.rackManager.getRack(sn);
         if (!racksToIndex.containsKey(rack)) {
           racksToIndex.put(rack, numRacks++);
           serversPerRackList.add(new ArrayList<>());
         }
         int rackIndex = racksToIndex.get(rack);
+        // 默认情况下所有server都在一个机架
         serversPerRackList.get(rackIndex).add(serverIndex);
       }
 
@@ -294,6 +299,7 @@ public abstract class BaseLoadBalancer implements LoadBalancer {
         // or this servername has the newest startcode.
         if (servers[serverIndex] == null ||
             servers[serverIndex].getStartcode() < entry.getKey().getStartcode()) {
+          // 将servers下标设置为一台机器上启动最早的实例
           servers[serverIndex] = entry.getKey();
         }
 
@@ -311,10 +317,12 @@ public abstract class BaseLoadBalancer implements LoadBalancer {
 
       hosts = new String[numHosts];
       for (Entry<String, Integer> entry : hostsToIndex.entrySet()) {
+        // 反向查询hosts下标索引的hostName
         hosts[entry.getValue()] = entry.getKey();
       }
       racks = new String[numRacks];
       for (Entry<String, Integer> entry : racksToIndex.entrySet()) {
+        // 反向查询racks下标索引的rackName
         racks[entry.getValue()] = entry.getKey();
       }
 
@@ -323,13 +331,16 @@ public abstract class BaseLoadBalancer implements LoadBalancer {
         regionPerServerIndex = 0;
 
         int hostIndex = hostsToIndex.get(entry.getKey().getHostname());
+        // 记录server所在主机下标
         serverIndexToHostIndex[serverIndex] = hostIndex;
 
         int rackIndex = racksToIndex.get(this.rackManager.getRack(entry.getKey()));
+        // 记录server所在机架下标
         serverIndexToRackIndex[serverIndex] = rackIndex;
 
         for (RegionInfo region : entry.getValue()) {
           registerRegion(region, regionIndex, serverIndex, loads, regionFinder);
+          // server上每个region在所有region的位置
           regionsPerServer[serverIndex][regionPerServerIndex++] = regionIndex;
           regionIndex++;
         }
@@ -340,6 +351,7 @@ public abstract class BaseLoadBalancer implements LoadBalancer {
         regionIndex++;
       }
 
+      // serversPerHostList转为数组
       for (int i = 0; i < serversPerHostList.size(); i++) {
         serversPerHost[i] = new int[serversPerHostList.get(i).size()];
         for (int j = 0; j < serversPerHost[i].length; j++) {
@@ -350,6 +362,7 @@ public abstract class BaseLoadBalancer implements LoadBalancer {
         }
       }
 
+      // serversPerRackList转为数组
       for (int i = 0; i < serversPerRackList.size(); i++) {
         serversPerRack[i] = new int[serversPerRackList.get(i).size()];
         for (int j = 0; j < serversPerRack[i].length; j++) {
@@ -456,6 +469,9 @@ public abstract class BaseLoadBalancer implements LoadBalancer {
       }
     }
 
+    /**
+     * 记录region相关信息，比如在哪个server上，维护的表是什么，block所在的serverName列表
+     */
     /** Helper for Cluster constructor to handle a region */
     private void registerRegion(RegionInfo region, int regionIndex,
         int serverIndex, Map<String, Deque<BalancerRegionLoad>> loads,
@@ -1051,6 +1067,8 @@ public abstract class BaseLoadBalancer implements LoadBalancer {
   }
 
   /**
+   * 利用map的key无序来随机选择移动的server，如果开启了只允许系统表在master上或者处于维护模式，会将系统表移动到master上，非系统表移动到其他server上
+   * 其他情况master上的region会越来越少，因为只会将表移出master，不会移入
    * Balance the regions that should be on master regionserver.
    */
   protected List<RegionPlan> balanceMasterRegions(Map<ServerName, List<RegionInfo>> clusterMap) {
@@ -1058,12 +1076,14 @@ public abstract class BaseLoadBalancer implements LoadBalancer {
     List<RegionPlan> plans = null;
     List<RegionInfo> regions = clusterMap.get(masterServerName);
     if (regions != null) {
-      Iterator<ServerName> keyIt = null;
-      for (RegionInfo region: regions) {
+        Iterator<ServerName> keyIt = null;
+        for (RegionInfo region: regions) {
+        // 如果开启了只允许系统表在master上或者处于维护模式，非系统表移动到其他server上
         if (shouldBeOnMaster(region)) continue;
 
         // Find a non-master regionserver to host the region
         if (keyIt == null || !keyIt.hasNext()) {
+          // 其实就是非常简单的利用map无序,来打乱region
           keyIt = clusterMap.keySet().iterator();
         }
         ServerName dest = keyIt.next();
@@ -1075,6 +1095,7 @@ public abstract class BaseLoadBalancer implements LoadBalancer {
         }
 
         // Move this region away from the master regionserver
+        // 创建迁移计划，建立将master上的region移动到其他server
         RegionPlan plan = new RegionPlan(region, masterServerName, dest);
         if (plans == null) {
           plans = new ArrayList<>();
@@ -1082,11 +1103,12 @@ public abstract class BaseLoadBalancer implements LoadBalancer {
         plans.add(plan);
       }
     }
+    // 如果开启了只允许系统表在master上或者处于维护模式，将不在master上的系统表移动到master上
     for (Map.Entry<ServerName, List<RegionInfo>> server: clusterMap.entrySet()) {
       if (masterServerName.equals(server.getKey())) continue;
       for (RegionInfo region: server.getValue()) {
         if (!shouldBeOnMaster(region)) continue;
-
+        // 只有开启了只允许系统表在master上或者处于维护模式才能走到下面这步骤
         // Move this region to the master regionserver
         RegionPlan plan = new RegionPlan(region, server.getKey(), masterServerName);
         if (plans == null) {

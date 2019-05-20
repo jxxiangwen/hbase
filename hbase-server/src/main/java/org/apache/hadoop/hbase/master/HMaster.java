@@ -1581,11 +1581,13 @@ public class HMaster extends HRegionServer implements MasterServices {
 
   public boolean balance(boolean force) throws IOException {
     // if master not initialized, don't run balancer.
+    // 没有初始化
     if (!isInitialized()) {
       LOG.debug("Master has not been initialized, don't run balancer.");
       return false;
     }
 
+    // 在维护模式
     if (isInMaintenanceMode()) {
       LOG.info("Master is in maintenanceMode mode, don't run balancer.");
       return false;
@@ -1594,6 +1596,7 @@ public class HMaster extends HRegionServer implements MasterServices {
     int maxRegionsInTransition = getMaxRegionsInTransition();
     synchronized (this.balancer) {
       // If balance not true, don't run balancer.
+      // balance开关是否打开
       if (!this.loadBalancerTracker.isBalancerOn()) return false;
         // Only allow one balance run at at time.
       if (this.assignmentManager.hasRegionsInTransition()) {
@@ -1601,6 +1604,7 @@ public class HMaster extends HRegionServer implements MasterServices {
         // if hbase:meta region is in transition, result of assignment cannot be recorded
         // ignore the force flag in that case
         boolean metaInTransition = assignmentManager.isMetaRegionInTransition();
+        // 下面只是为了日志打印
         String prefix = force && !metaInTransition ? "R" : "Not r";
         List<RegionStateNode> toPrint = regionsInTransition;
         int max = 5;
@@ -1611,9 +1615,11 @@ public class HMaster extends HRegionServer implements MasterServices {
         }
         LOG.info(prefix + "unning balancer because " + regionsInTransition.size() +
           " region(s) in transition: " + toPrint + (truncated? "(truncated list)": ""));
+        // 如果没有强制，代表有region在处理就返回，同时如果meta region在处理也返回
         if (!force || metaInTransition) return false;
       }
       if (this.serverManager.areDeadServersInProgress()) {
+        // 集群中有挂掉的region server，返回
         LOG.info("Not running balancer because processing dead regionserver(s): " +
           this.serverManager.getDeadServers());
         return false;
@@ -1628,6 +1634,7 @@ public class HMaster extends HRegionServer implements MasterServices {
         }
       }
       if (regionNotOnOnlineServer > 0) {
+        // 有打开的region在非online的server上，返回
         LOG.info("Not running balancer because {} regions found not on an online server",
             regionNotOnOnlineServer);
         return false;
@@ -1635,6 +1642,7 @@ public class HMaster extends HRegionServer implements MasterServices {
 
       if (this.cpHost != null) {
         try {
+          // 目前在这里只检查有没有权限调用
           if (this.cpHost.preBalance()) {
             LOG.debug("Coprocessor bypassing balancer request");
             return false;
@@ -1651,11 +1659,13 @@ public class HMaster extends HRegionServer implements MasterServices {
 
       List<RegionPlan> plans = new ArrayList<>();
 
+      // 设置当前集群状态
       //Give the balancer the current cluster state.
       this.balancer.setClusterMetrics(getClusterMetricsWithoutCoprocessor());
       this.balancer.setClusterLoad(assignmentsByTable);
 
       for (Map<ServerName, List<RegionInfo>> serverMap : assignmentsByTable.values()) {
+        // 将一些已经不能再添加region的server移除
         serverMap.keySet().removeAll(this.serverManager.getDrainingServersList());
       }
       for (Entry<TableName, Map<ServerName, List<RegionInfo>>> e : assignmentsByTable.entrySet()) {

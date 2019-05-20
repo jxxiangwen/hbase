@@ -18,12 +18,6 @@
  */
 package org.apache.hadoop.hbase;
 
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.regex.Pattern;
-
 import org.apache.hadoop.hbase.net.Address;
 import org.apache.hadoop.hbase.util.Addressing;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -31,6 +25,12 @@ import org.apache.hbase.thirdparty.com.google.common.collect.Interner;
 import org.apache.hbase.thirdparty.com.google.common.collect.Interners;
 import org.apache.hbase.thirdparty.com.google.common.net.InetAddresses;
 import org.apache.yetus.audience.InterfaceAudience;
+
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.regex.Pattern;
 
 
 
@@ -91,6 +91,9 @@ public class ServerName implements Comparable<ServerName>, Serializable {
   public static final String UNKNOWN_SERVERNAME = "#unknown#";
 
   private final String servername;
+  /**
+   * 一般是实例的启动时间，可以用来区分同一台机器启动的多个实例
+   */
   private final long startcode;
   private transient Address address;
 

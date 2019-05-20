@@ -229,7 +229,7 @@ class RegionLocationFinder {
   /**
    * Map hostname to ServerName, The output ServerName list will have the same
    * order as input hosts.
-   *
+   * host转成ServerName
    * @param hosts the list of hosts
    * @return ServerName list
    */

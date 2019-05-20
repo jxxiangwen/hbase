@@ -331,6 +331,7 @@ public class StochasticLoadBalancer extends BaseLoadBalancer {
   public synchronized List<RegionPlan> balanceCluster(Map<ServerName,
     List<RegionInfo>> clusterState) {
     List<RegionPlan> plans = balanceMasterRegions(clusterState);
+    // 第一个条件代表着如果有master的计划就直接返回了，去执行master的计划
     if (plans != null || clusterState == null || clusterState.size() <= 1) {
       return plans;
     }

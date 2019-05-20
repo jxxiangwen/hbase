@@ -19,9 +19,6 @@
 
 package org.apache.hadoop.hbase.regionserver;
 
-import java.io.IOException;
-import java.util.List;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.CellComparator;
 import org.apache.hadoop.hbase.regionserver.compactions.CompactionContext;
@@ -29,6 +26,9 @@ import org.apache.hadoop.hbase.regionserver.compactions.CompactionPolicy;
 import org.apache.hadoop.hbase.regionserver.compactions.Compactor;
 import org.apache.hadoop.hbase.util.ReflectionUtils;
 import org.apache.yetus.audience.InterfaceAudience;
+
+import java.io.IOException;
+import java.util.List;
 
 /**
  * StoreEngine is a factory that can create the objects necessary for HStore to operate.
@@ -41,7 +41,7 @@ public abstract class StoreEngine<SF extends StoreFlusher,
   protected SF storeFlusher;
   protected CP compactionPolicy;
   protected C compactor;
-  protected SFM storeFileManager;
+  protected SFM storeFileManager; // 默认使用DefaultStoreFileManager
 
   /**
    * The name of the configuration parameter that specifies the class of

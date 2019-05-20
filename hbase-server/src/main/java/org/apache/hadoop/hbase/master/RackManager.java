@@ -53,6 +53,7 @@ public class RackManager {
   }
 
   /**
+   * 获取server所在的机架，根据dns来映射，默认不配置可以认为只有一个机架
    * Get the name of the rack containing a server, according to the DNS to
    * switch mapping.
    * @param server the server for which to get the rack name
