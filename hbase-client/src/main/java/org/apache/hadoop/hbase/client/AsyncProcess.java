@@ -19,38 +19,12 @@
 
 package org.apache.hadoop.hbase.client;
 
-import java.io.IOException;
-import java.io.InterruptedIOException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.hbase.RetryImmediatelyException;
-import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.DoNotRetryIOException;
-import org.apache.hadoop.hbase.HConstants;
-import org.apache.hadoop.hbase.HRegionInfo;
-import org.apache.hadoop.hbase.HRegionLocation;
-import org.apache.hadoop.hbase.RegionLocations;
-import org.apache.hadoop.hbase.ServerName;
-import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.*;
+import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.client.backoff.ServerStatistics;
 import org.apache.hadoop.hbase.client.coprocessor.Batch;
 import org.apache.hadoop.hbase.exceptions.ClientExceptionsUtil;
@@ -59,7 +33,12 @@ import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
 import org.apache.htrace.Trace;
 
-import com.google.common.annotations.VisibleForTesting;
+import java.io.IOException;
+import java.io.InterruptedIOException;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * This class  allows a continuous flow of requests. It's written to be compatible with a
@@ -389,6 +368,7 @@ class AsyncProcess {
     List<Exception> locationErrors = null;
     List<Integer> locationErrorRows = null;
     do {
+      // 等待正在执行的任务小于maxTotalConcurrentTasks - 1
       // Wait until there is at least one slot for a new task.
       waitForMaximumCurrentTasks(maxTotalConcurrentTasks - 1, tableName.getNameAsString());
 
@@ -415,6 +395,7 @@ class AsyncProcess {
           }
           loc = locs.getDefaultRegionLocation();
         } catch (IOException ex) {
+          // 延迟初始化
           locationErrors = new ArrayList<Exception>();
           locationErrorRows = new ArrayList<Integer>();
           LOG.error("Failed to get region location ", ex);
@@ -427,12 +408,14 @@ class AsyncProcess {
           break; // Backward compat: we stop considering actions on location error.
         }
 
+        // 通过在执行的任务数量判断当前region和server是否可用
         if (canTakeOperation(loc, regionIncluded, serverIncluded)) {
           Action<Row> action = new Action<Row>(r, ++posInList);
           setNonce(ng, r, action);
           retainedActions.add(action);
           // TODO: replica-get is not supported on this path
           byte[] regionName = loc.getRegionInfo().getRegionName();
+          // 将action按照server分到multiAction中，multiAction中按照regionName分组
           addAction(loc.getServerName(), regionName, action, actionsByServer, nonceGroup);
           it.remove();
         }
@@ -475,6 +458,7 @@ class AsyncProcess {
    */
   private static void addAction(ServerName server, byte[] regionName, Action<Row> action,
       Map<ServerName, MultiAction<Row>> actionsByServer, long nonceGroup) {
+    // 将action按照server分到multiAction中，multiAction中按照regionName分组
     MultiAction<Row> multiAction = actionsByServer.get(server);
     if (multiAction == null) {
       multiAction = new MultiAction<Row>();
@@ -488,6 +472,7 @@ class AsyncProcess {
   }
 
   /**
+   * 通过在执行的任务数量判断当前region和server是否可用
    * Check if we should send new operations to this region or region server.
    * We're taking into account the past decision; if we have already accepted
    * operation on a given region, we accept all operations for this region.
@@ -513,6 +498,7 @@ class AsyncProcess {
       return false;
     }
 
+    // 如果region正在执行的任务数量超过了maxConcurrentTasksPerRegion，就将该region标记为false
     AtomicInteger regionCnt = taskCounterPerRegion.get(loc.getRegionInfo().getRegionName());
     if (regionCnt != null && regionCnt.get() >= maxConcurrentTasksPerRegion) {
       // Too many tasks on this region already.
@@ -529,15 +515,18 @@ class AsyncProcess {
         }
       }
 
+      // 总任务数量是否过多
       // Do we have too many total tasks already?
       boolean ok = (newServers + tasksInProgress.get()) < maxTotalConcurrentTasks;
 
+      // 要操作的server任务数量是否过多
       if (ok) {
         // If the total is fine, is it ok for this individual server?
         AtomicInteger serverCnt = taskCounterPerServer.get(loc.getServerName());
         ok = (serverCnt == null || serverCnt.get() < maxConcurrentTasksPerServer);
       }
 
+      // 超过任务数量置为不可用
       if (!ok) {
         regionsIncluded.put(regionInfo, Boolean.FALSE);
         serversIncluded.put(loc.getServerName(), Boolean.FALSE);
@@ -848,15 +837,19 @@ class AsyncProcess {
           if (isReplicaGet) {
             hasAnyReplicaGets = true;
             if (hasAnyNonReplicaReqs) { // Mixed case
+              // 既有副本读也有非副本请求
               if (replicaGetIndices == null) {
                 replicaGetIndices = new ArrayList<Integer>(actions.size() - 1);
               }
+              // 记下副本读的位置
               replicaGetIndices.add(posInList);
             }
           } else if (!hasAnyNonReplicaReqs) {
+            // 只有第一次存在非副本读会进到这里
             // The first non-multi-replica request in the action list.
             hasAnyNonReplicaReqs = true;
             if (posInList > 0) {
+              // 记下已经存在的副本读的位置
               // Add all the previous requests to the index lists. We know they are all
               // replica-gets because this is the first non-multi-replica request in the list.
               replicaGetIndices = new ArrayList<Integer>(actions.size() - 1);
@@ -1015,6 +1008,7 @@ class AsyncProcess {
       for (Map.Entry<ServerName, MultiAction<Row>> e : actionsByServer.entrySet()) {
         ServerName server = e.getKey();
         MultiAction<Row> multiAction = e.getValue();
+        // 增加在执行的总任务，server任务和region任务
         incTaskCounters(multiAction.getRegions(), server);
         Collection<? extends Runnable> runnables = getNewMultiActionRunnable(server, multiAction,
             numAttempt);
@@ -1026,6 +1020,7 @@ class AsyncProcess {
 
         // run all the runnables
         for (Runnable runnable : runnables) {
+          // 如果是最后一个action，并且重用线程就直接用当前线程执行
           if ((--actionsRemaining == 0) && reuseThread) {
             runnable.run();
           } else {
@@ -1634,12 +1629,15 @@ class AsyncProcess {
       boolean hasWait = cutoff != Long.MAX_VALUE;
       long lastLog = EnvironmentEdgeManager.currentTime();
       long currentInProgress;
+      // actionsInProgress不等于0代表还有提交
       while (0 != (currentInProgress = actionsInProgress.get())) {
         long now = EnvironmentEdgeManager.currentTime();
         if (hasWait && (now * 1000L) > cutoff) {
+          // 超时了
           return false;
         }
         if (!hasWait) { // Only log if wait is infinite.
+          // 如果无限等待，每10秒记一次日志
           if (now > lastLog + 10000) {
             lastLog = now;
             LOG.info("#" + id + ", waiting for " + currentInProgress
@@ -1722,12 +1720,14 @@ class AsyncProcess {
     waitForMaximumCurrentTasks(max, tasksInProgress, id, tableName);
   }
 
+  // 等待正在执行的任务小于最大值
   // Break out this method so testable
   @VisibleForTesting
   void waitForMaximumCurrentTasks(int max, final AtomicLong tasksInProgress, final long id,
       String tableName) throws InterruptedIOException {
     long lastLog = EnvironmentEdgeManager.currentTime();
     long currentInProgress, oldInProgress = Long.MAX_VALUE;
+    // 如果当前正在执行的任务大于max就循环等待
     while ((currentInProgress = tasksInProgress.get()) > max) {
       if (oldInProgress != currentInProgress) { // Wait for in progress to change.
         long now = EnvironmentEdgeManager.currentTime();
@@ -1743,6 +1743,7 @@ class AsyncProcess {
       }
       oldInProgress = currentInProgress;
       try {
+        // 等待正在执行的任务有变化
         synchronized (tasksInProgress) {
           if (tasksInProgress.get() == oldInProgress) {
             tasksInProgress.wait(10);
@@ -1809,6 +1810,7 @@ class AsyncProcess {
 
   /**
    * increment the tasks counters for a given set of regions. MT safe.
+   * 增加在执行的总任务，server任务和region任务
    */
   protected void incTaskCounters(Collection<byte[]> regions, ServerName sn) {
     tasksInProgress.incrementAndGet();

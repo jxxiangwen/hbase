@@ -17,14 +17,10 @@
  */
 package org.apache.hadoop.hbase.client;
 
-import java.io.IOException;
-import java.util.Random;
-import java.util.concurrent.ExecutorService;
-
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.commons.logging.Log;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HConstants;
-import org.apache.hadoop.hbase.RegionLocations;
 import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
@@ -33,7 +29,9 @@ import org.apache.hadoop.hbase.protobuf.generated.ClientProtos.ClientService;
 import org.apache.hadoop.hbase.security.User;
 import org.apache.hadoop.hbase.security.UserProvider;
 
-import com.google.common.annotations.VisibleForTesting;
+import java.io.IOException;
+import java.util.Random;
+import java.util.concurrent.ExecutorService;
 
 /**
  * Utility used by client connections.
@@ -49,6 +47,7 @@ public class ConnectionUtils {
    * @param tries
    * @return How long to wait after <code>tries</code> retries
    */
+  // 避退
   public static long getPauseTime(final long pause, final int tries) {
     int ntries = tries;
     if (ntries >= HConstants.RETRY_BACKOFF.length) {

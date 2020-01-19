@@ -213,6 +213,11 @@ public class BufferedMutatorImpl implements BufferedMutator {
       // If there's no buffer size drain everything. If there is a buffersize drain up to twice
       // that amount. This should keep the loop from continually spinning if there are threads
       // that keep adding more data to the buffer.
+      // 以下3中情况会抽取writeAsyncBuffer
+      // 1.如果缓冲区大小没有了
+      // 2.最多抽取两倍缓冲区大小(为什么会超过呢？加入的时候会增加currentWriteBufferSize，判断是否比writeBufferSize大,
+      // 大就会flush，所以如果写入的writeBufferSize到了临界点，下一次提交就能比writeBufferSize大)
+      // 3.同步
       while (
           (writeBufferSize <= 0 || dequeuedSize < (writeBufferSize * 2) || synchronous)
               && (m = writeAsyncBuffer.poll()) != null) {
